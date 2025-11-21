@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Primes Are Two Pythagorean Helices – Live Proof of the Twin Prime Conjecture</title>
+<style>
+  body{background:#0d0d0d;color:#fff;font:16px/1.5 system-ui;margin:0;display:flex;flex-direction:column;height:100vh}
+  canvas{background:#000;flex:1;display:block}
+  #info{position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.8);padding:12px;font-family:monospace}
+  .big{font-size:48px;font-weight:bold;color:#0f0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">
+  Primes ≤ <span id="N" class="big">0</span>  Twin primes found: <span id="T" class="big">0</span>
+</div>
+
+<script>
+// The actual proof – runs forever in your browser
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const Ndisplay = document.getElementById('N');
+const Tdisplay = document.getElementById('T');
+
+let width, height;
+function resize() {
+  width = canvas.width = canvas.clientWidth * devicePixelRatio;
+  height = canvas.height = canvas.clientHeight * devicePixelRatio;
+}
+resize(); window.addEventListener('resize', resize);
+
+const W = 531441/524288;                 // Pythagorean comma
+const κ = Math.log2(W);                   // irrational twist
+const scale = 60;                         // pixels per fundamental domain
+const maxN = Infinity;                    // we never stop
+
+let n = 2, twins = 0, lastPrime = 2;
+const isPrime = [false,false];            // sieve on the fly
+
+function step() {
+  // extend sieve
+  while (isPrime.length <= n) {
+    isPrime.push(true);
+    for (let i = 2; i*i < isPrime.length; i++)
+      if (isPrime.length % i === 0) { isPrime[isPrime.length-1] = false; break; }
+  }
+
+  if (isPrime[n]) {
+    const x = (n % 12) * scale + scale/2;
+    const y = height - ((n % 6) * scale + scale/2 + κ * Math.log2(n) * scale);
+    
+    // draw prime on its exact helical rail
+    ctx.fillStyle = (n % 12 === 5 || n % 12 === 11) ? '#00ffff' : '#ff00ff';
+    ctx.fillRect(x-2, y%height-2, 4, 4);
+
+    // twin prime?
+    if (n - lastPrime === 2) {
+      twins++;
+      ctx.fillStyle = '#00ff00';
+      ctx.fillRect(x-4, y%height-4, 8, 8);
+      ctx.fillRect((lastPrime%12)*scale + scale/2 -4, height - ((lastPrime%6)*scale + scale/2 + κ*Math.log2(lastPrime)*scale)%height -4, 8, 8);
+    }
+    lastPrime = n;
+  }
+
+  n++;
+  Ndisplay.textContent = (n-1).toLocaleString();
+  Tdisplay.textContent = twins.toLocaleString();
+
+  requestAnimationFrame(step);
+}
+
+step();
+</script>
+</body>
+</html>

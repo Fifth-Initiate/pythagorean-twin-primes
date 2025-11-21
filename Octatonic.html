@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Comma-First Prime Lattice — S¹₆ × S¹₁₂ · Octatonic Geodesic · Twin Corridors</title>
+<style>
+  :root{
+    --bg:#0b0c10; --fg:#eaf0f2; --muted:#9aa5b1; --accent:#7df9ff;
+    --good:#7CFC00; --warn:#ffd166; --hot:#ff006e; --rail1:#00d1ff; --rail5:#ffb703;
+    --corr:#12313b; --grid:#182029; --frame:#1c2127;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px 18px}
+  h1{font-size:20px;margin:6px 0 10px 0}
+  .row{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap}
+  .card{background:#111417;border:1px solid var(--frame);border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .controls{display:grid;grid-template-columns:repeat(6, minmax(120px,1fr));gap:10px}
+  label{display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
+  input[type=range]{width:100%}
+  input[type=checkbox]{transform:translateY(1px)}
+  canvas{width:100%;height:620px;background:#0a0d10;border-radius:16px;border:1px solid var(--grid)}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+  .dot{display:inline-flex;gap:6px;align-items:center}
+  .sw{width:12px;height:12px;border-radius:50%}
+  .mono{font-family:ui-monospace,SFMono-Regular,Consolas,Monaco,Menlo,monospace}
+  .note{color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Comma-First Prime Lattice — torus <span class="mono">S¹₆ × S¹₁₂</span>, octatonic geodesic, and twin corridors</h1>
+  <div class="row">
+    <div class="card" style="flex:2 1 720px">
+      <canvas id="view" width="1200" height="620"></canvas>
+      <div class="legend">
+        <span class="dot"><span class="sw" style="background:var(--rail1)"></span><small>rail 6n+1</small></span>
+        <span class="dot"><span class="sw" style="background:var(--rail5)"></span><small>rail 6n+5</small></span>
+        <span class="dot"><span class="sw" style="background:var(--good)"></span><small>twin (p,p+2)</small></span>
+        <span class="dot"><span class="sw" style="background:var(--hot)"></span><small>flat torsion |Δ²p|≤2</small></span>
+        <span class="dot"><span class="sw" style="background:var(--accent)"></span><small>octatonic geodesic</small></span>
+        <span class="dot"><span class="sw" style="background:var(--corr)"></span><small>corridor band</small></span>
+      </div>
+      <p class="note">
+        Grid is the unwrapped torus: horizontal axis <span class="mono">n mod 12</span>, vertical axis <span class="mono">n mod 6</span>.
+        Points are primes ≤ N (alpha-blended by multiplicity). Green rings mark twin-members. Magenta rings mark primes with flat second difference |Δ²p|≤2.
+        Cyan helices render an octatonic cycle lifted by a comma shear <span class="mono">κ</span>.
+      </p>
+    </div>
+
+    <div class="card" style="flex:1 1 360px">
+      <div class="controls">
+        <label>Limit N
+          <input id="N" type="range" min="5000" max="500000" step="5000" value="100000"/>
+          <span class="mono" id="N_val">100000</span>
+        </label>
+        <label>Comma twist κ (×10⁻²)
+          <input id="kappa" type="range" min="0" max="300" step="1" value="19"/>
+          <span class="mono" id="kappa_val">0.19</span>
+        </label>
+        <label>Octatonic phase
+          <input id="phase" type="range" min="0" max="2" step="1" value="0"/>
+          <span class="mono" id="phase_val">0</span>
+        </label>
+        <label>Torsion window W
+          <input id="W" type="range" min="1" max="10" step="1" value="3"/>
+          <span class="mono" id="W_val">3</span>
+        </label>
+        <label>Show corridors
+          <input id="corridors" type="checkbox" checked/>
+        </label>
+        <label>Animate κ
+          <input id="anim" type="checkbox"/>
+        </label>
+      </div>
+      <div style="margin-top:10px">
+        <div class="mono" id="stats">—</div>
+      </div>
+      <p class="note">
+        Corridor mask is computed from local flat-torsion density (|Δ²p|≤2) per residue cell; top quartile cells are shaded. Stats report twins inside corridors vs overall.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const cvs = document.getElementById('view');
+  const ctx = cvs.getContext('2d');
+  const $N = document.getElementById('N');
+  const $Nval = document.getElementById('N_val');
+  const $kap = document.getElementById('kappa');
+  const $kapval = document.getElementById('kappa_val');
+  const $phase = document.getElementById('phase');
+  const $phaseval = document.getElementById('phase_val');
+  const $W = document.getElementById('W');
+  const $Wval = document.getElementById('W_val');
+  const $corr = document.getElementById('corridors');
+  const $anim = document.getElementById('anim');
+  const $stats = document.getElementById('stats');
+
+  const WCOLS = 12, HROWS = 6;
+  function cellRect(w,h){ return {
+    x0: 40, y0: 36,
+    cw: (cvs.width-80)/WCOLS,
+    ch: (cvs.height-80)/HROWS
+  };}
+
+  // Octatonic (diminished) cycles on mod 12
+  const OCT = [
+    [0,1,3,4,6,7,9,10],
+    [2,3,5,6,8,9,11,0],
+    [4,5,7,8,10,11,1,2]
+  ];
+
+  // Sieve of Eratosthenes
+  function sieve(limit){
+    const isPrime = new Uint8Array(limit+1);
+    isPrime.fill(1); isPrime[0]=0; isPrime[1]=0;
+    for(let p=2;p*p<=limit;p++){
+      if(isPrime[p]){
+        for(let q=p*p;q<=limit;q+=p) isPrime[q]=0;
+      }
+    }
+    const primes=[]; for(let n=2;n<=limit;n++) if(isPrime[n]) primes.push(n);
+    return {isPrime,primes};
+  }
+
+  // Compute second differences on prime sequence
+  function primeDelta2(primes){
+    const d2 = new Map(); // p -> Δ² at index of p
+    if(primes.length<3) return d2;
+    const gaps = new Array(primes.length-1);
+    for(let k=0;k<gaps.length;k++) gaps[k] = primes[k+1]-primes[k];
+    for(let k=1;k<gaps.length;k++){
+      const dd = gaps[k]-gaps[k-1];
+      d2.set(primes[k], dd);
+    }
+    return d2;
+  }
+
+  function buildData(N){
+    const {isPrime,primes} = sieve(N);
+    const d2 = primeDelta2(primes);
+    const isFlat = new Map(); // |Δ²|≤2
+    for(const p of primes){
+      const v = d2.get(p);
+      isFlat.set(p, (v!==undefined) && (Math.abs(v)<=2));
+    }
+    // Twins
+    const twins = [];
+    for(const p of primes){
+      if(p+2<=N && isPrime[p+2]) twins.push([p,p+2]);
+    }
+
+    // Residue cell accumulators
+    const cellPrime = Array.from({length:HROWS},()=>Array(WCOLS).fill(0));
+    const cellFlat  = Array.from({length:HROWS},()=>Array(WCOLS).fill(0));
+    const cellTwin  = Array.from({length:HROWS},()=>Array(WCOLS).fill(0));
+
+    for(const p of primes){
+      const u = p%6, v = p%12;
+      cellPrime[u][v] += 1;
+      if(isFlat.get(p)) cellFlat[u][v] += 1;
+    }
+    for(const [a,b] of twins){
+      const ua=a%6, va=a%12, ub=b%6, vb=b%12;
+      cellTwin[ua][va] += 1;
+      cellTwin[ub][vb] += 1;
+    }
+
+    // Corridor mask: top quartile of flat density
+    const flatVals=[];
+    for(let u=0;u<HROWS;u++) for(let v=0;v<WCOLS;v++) flatVals.push(cellFlat[u][v]);
+    const sorted=[...flatVals].sort((x,y)=>x-y);
+    const qIdx = Math.floor(0.75*sorted.length);
+    const thresh = sorted[qIdx];
+    const corridor = Array.from({length:HROWS},()=>Array(WCOLS).fill(false));
+    for(let u=0;u<HROWS;u++) for(let v=0;v<WCOLS;v++){
+      corridor[u][v] = (cellFlat[u][v] >= thresh && (v===1||v===5||v===7||v===11)); // prime residue columns only
+    }
+
+    // Counts for stats
+    let twinTotal = twins.length;
+    let twinInCorr = 0;
+    for(const [a,b] of twins){
+      const aIn = corridor[a%6][a%12];
+      const bIn = corridor[b%6][b%12];
+      if(aIn && bIn) twinInCorr++;
+      else if(aIn || bIn) twinInCorr++; // count pair once if either end lies in corridor band
+    }
+    return {isPrime,primes,d2,isFlat,twins,cellPrime,cellFlat,cellTwin,corridor,twinTotal,twinInCorr};
+  }
+
+  function drawGrid(){
+    const {x0,y0,cw,ch} = cellRect(WCOLS,HROWS);
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--grid');
+    ctx.lineWidth = 1;
+    // outer frame
+    ctx.strokeRect(x0-1,y0-1,cw*WCOLS+2,ch*HROWS+2);
+    // columns
+    for(let v=0; v<=WCOLS; v++){
+      const x = x0 + v*cw;
+      ctx.beginPath(); ctx.moveTo(x,y0); ctx.lineTo(x,y0+HROWS*ch); ctx.stroke();
+    }
+    // rows
+    for(let u=0; u<=HROWS; u++){
+      const y = y0 + u*ch;
+      ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x0+WCOLS*cw,y); ctx.stroke();
+    }
+    // labels
+    ctx.fillStyle = '#9aa5b1';
+    ctx.font = '12px ui-monospace';
+    for(let v=0; v<WCOLS; v++){
+      ctx.fillText(v.toString().padStart(2,' '), x0 + v*cw + cw*0.42, y0 - 10);
+    }
+    for(let u=0; u<HROWS; u++){
+      ctx.fillText((u).toString(), x0 - 18, y0 + u*ch + ch*0.58);
+    }
+  }
+
+  function fillCorridors(mask){
+    if(!$corr.checked) return;
+    const {x0,y0,cw,ch} = cellRect(WCOLS,HROWS);
+    ctx.fillStyle = 'rgba(18,49,59,0.45)'; // var(--corr) with alpha
+    for(let u=0;u<HROWS;u++) for(let v=0;v<WCOLS;v++){
+      if(mask[u][v]){
+        ctx.fillRect(x0+v*cw+1, y0+u*ch+1, cw-2, ch-2);
+      }
+    }
+  }
+
+  function drawOctatonic(kappa, phase){
+    const {x0,y0,cw,ch} = cellRect(WCOLS,HROWS);
+    const cyc = OCT[phase%3];
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.9;
+    // draw three helices (one per row band, comma shear applied as integer wrap on v)
+    for(let u=0; u<HROWS; u++){
+      const shift = Math.round(kappa * u) % 12; // shear on v by κ·u
+      ctx.beginPath();
+      for(let i=0;i<cyc.length;i++){
+        const v = (cyc[i] + shift + 12) % 12;
+        const x = x0 + (v+0.5)*cw;
+        const y = y0 + (u+0.5)*ch;
+        if(i===0) ctx.moveTo(x,y);
+        else ctx.lineTo(x,y);
+        // node
+        ctx.beginPath();
+        ctx.arc(x,y,3,0,Math.PI*2);
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+        ctx.fill();
+      }
+      // close cycle
+      const v0 = (cyc[0]+shift+12)%12;
+      const x0p = x0 + (v0+0.5)*cw, y0p = y0 + (u+0.5)*ch;
+      ctx.beginPath(); ctx.arc(x0p,y0p,3,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawResidues(data){
+    const {x0,y0,cw,ch} = cellRect(WCOLS,HROWS);
+    // Alpha scale by count density
+    let maxCnt = 0;
+    for(let u=0;u<HROWS;u++) for(let v=0;v<WCOLS;v++)
+      if(data.cellPrime[u][v]>maxCnt) maxCnt = data.cellPrime[u][v];
+    // Plot primes as faint blobs per cell, colored by rail
+    for(let u=0;u<HROWS;u++) for(let v=0;v<WCOLS;v++){
+      const cnt = data.cellPrime[u][v];
+      if(cnt===0) continue;
+      const railColor = (v===1||v===7)?'--rail1' : (v===5||v===11)?'--rail5' : null;
+      if(!railColor) continue;
+      const alpha = Math.min(0.9, 0.15 + 0.85*cnt/maxCnt);
+      ctx.fillStyle = hexWithAlpha(getComputedStyle(document.documentElement).getPropertyValue(railColor), alpha);
+      const cx = x0 + v*cw + cw*0.5, cy = y0 + u*ch + ch*0.5;
+      const rx = Math.max(2, Math.min(cw*0.35, 2 + cnt/maxCnt*cw*0.40));
+      const ry = Math.max(2, Math.min(ch*0.35, 2 + cnt/maxCnt*ch*0.40));
+      roundedBlob(cx,cy,rx,ry);
+      ctx.fill();
+    }
+    // Flat torsion markers (magenta rings)
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--hot');
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9;
+    for(const p of data.primes){
+      if(!data.isFlat.get(p)) continue;
+      const u=p%6, v=p%12;
+      if(!((v===1)||(v===5)||(v===7)||(v===11))) continue;
+      const cx = x0 + v*cw + cw*0.5, cy = y0 + u*ch + ch*0.5;
+      ctx.beginPath(); ctx.arc(cx,cy, Math.min(cw,ch)*0.22, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Twin markers (green rings + connectors across v±2)
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--good');
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9;
+    for(const [a,b] of data.twins){
+      const ua=a%6, va=a%12, ub=b%6, vb=b%12;
+      if(!((va===5&&vb===7)||(va===11&&vb===1)||(va===7&&vb===9)||(va===1&&vb===3))) { /* generic link across columns by ±2 */ }
+      const ax = x0 + va*cw + cw*0.5, ay = y0 + ua*ch + ch*0.5;
+      const bx = x0 + vb*cw + cw*0.5, by = y0 + ub*ch + ch*0.5;
+      // rings
+      ctx.beginPath(); ctx.arc(ax,ay, Math.min(cw,ch)*0.26, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(bx,by, Math.min(cw,ch)*0.26, 0, Math.PI*2); ctx.stroke();
+      // connector (straight segment on unwrapped torus)
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function hexWithAlpha(cssColor, alpha){
+    // cssColor like " #00d1ff" -> rgba
+    const c = cssColor.trim();
+    if(c.startsWith('#')){
+      let r,g,b;
+      if(c.length===4){ r=parseInt(c[1]+c[1],16); g=parseInt(c[2]+c[2],16); b=parseInt(c[3]+c[3],16);}
+      else { r=parseInt(c.slice(1,3),16); g=parseInt(c.slice(3,5),16); b=parseInt(c.slice(5,7),16); }
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+    return cssColor;
+  }
+  function roundedBlob(cx,cy,rx,ry){
+    const k=0.552284749831; // circle approx
+    const ox = rx*k, oy = ry*k;
+    ctx.beginPath();
+    ctx.moveTo(cx-rx,cy);
+    ctx.bezierCurveTo(cx-rx,cy-oy, cx-ox,cy-ry, cx,cy-ry);
+    ctx.bezierCurveTo(cx+ox,cy-ry, cx+rx,cy-oy, cx+rx,cy);
+    ctx.bezierCurveTo(cx+rx,cy+oy, cx+ox,cy+ry, cx,cy+ry);
+    ctx.bezierCurveTo(cx-ox,cy+ry, cx-rx,cy+oy, cx-rx,cy);
+    ctx.closePath();
+  }
+
+  let DATA = buildData(parseInt($N.value,10));
+  let raf=null, t0=null;
+
+  function render(){
+    const N = parseInt($N.value,10);
+    const kap = parseInt($kap.value,10)/100; // κ in ~[0,3]
+    const phase = parseInt($phase.value,10);
+    const W = parseInt($W.value,10);
+    $Nval.textContent = N.toString();
+    $kapval.textContent = kap.toFixed(2);
+    $phaseval.textContent = phase.toString();
+    $Wval.textContent = W.toString();
+
+    drawGrid();
+    fillCorridors(DATA.corridor);
+    drawOctatonic(kap, phase);
+    drawResidues(DATA);
+
+    $stats.innerHTML =
+      `primes≤N: ${DATA.primes.length.toLocaleString()} · `+
+      `twins: ${DATA.twinTotal.toLocaleString()} · `+
+      `twins in corridor: ${DATA.twinInCorr.toLocaleString()} · `+
+      `corridor cells: ${DATA.corridor.flat().filter(Boolean).length}/72`;
+  }
+
+  function rebuildAndRender(){
+    DATA = buildData(parseInt($N.value,10));
+    render();
+  }
+
+  // Controls
+  $N.addEventListener('input', ()=>{ $Nval.textContent=$N.value; });
+  [$N,$kap,$phase,$W,$corr].forEach(el=>el.addEventListener('change', render));
+  [$kap,$phase,$W].forEach(el=>el.addEventListener('input', render));
+
+  // Animate κ slowly if toggled
+  function loop(ts){
+    if(!t0) t0 = ts;
+    const dt = (ts - t0)/1000;
+    if($anim.checked){
+      const base = 0.19, amp = 0.12, speed = 0.15; // gentle shear breathing
+      const v = base + amp*Math.sin(2*Math.PI*speed*dt);
+      $kap.value = Math.max(0, Math.min(300, Math.round(v*100)));
+      $kapval.textContent = (parseInt($kap.value,10)/100).toFixed(2);
+      render();
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  // Initial draw
+  rebuildAndRender();
+  render();
+  raf = requestAnimationFrame(loop);
+
+  // Rebuild when N slider released
+  $N.addEventListener('change', rebuildAndRender);
+
+})();
+</script>
+</body>
+</html>

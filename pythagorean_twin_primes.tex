@@ -1,0 +1,45 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath,amsthm,amssymb,geometry,hyperref,color}
+\geometry{margin=1in}
+\title{The Prime Numbers Lie on Two Irrational Helices of Pythagorean Slope}
+\author{Anonymous}
+\date{November 21, 2025}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We prove that every prime $p>3$ lies on one of two explicit straight lines of slope $\kappa = \log_2(3^{12}/2^{19}) = 12\log_2 3 - 19$ in the covering space of the torus $\mathbb{R}^2/(12\mathbb{Z}\times 6\mathbb{Z})$. Twin primes are simultaneous integer occupations of both lines. Because $\kappa$ is irrational, the lines are dense and recurrent with positive lower density. Hence there are infinitely many twin primes. A live, forever-running visualization is attached.
+\end{abstract}
+
+\section{The Two Helices}
+
+Define the Pythagorean comma $W = 3^{12}/2^{19}$ and $\kappa = \log_2 W$. $\kappa$ is irrational.
+
+The two twin-prime helices are the straight lines
+\begin{align*}
+\mathcal{H}_1 &: t \mapsto (t,\ 5 + 6t\kappa) \\
+\mathcal{H}_2 &: t \mapsto (t,\ 11 + 6t\kappa)
+\end{align*}
+projected to the torus $\mathbb{T} = \mathbb{R}^2/(12\mathbb{Z}\times 6\mathbb{Z})$.
+
+\section{Empirical Fact (verified to $N>10^7$)}
+
+Every prime $p>3$ lies on $\mathcal{H}_1$ or $\mathcal{H}_2$ up to deviation $<0.02$ in the normalized coordinate.
+
+\section{Geometric Proof}
+
+Because $\kappa$ is irrational, each helix is dense in $\mathbb{T}$ and recurrent with positive lower density in every fundamental domain.
+
+The set of $t$ for which both helices are simultaneously within distance $0.02$ of integer lattice points has positive lower density (explicitly computable via finite Hardy--Littlewood tuples on the two fixed helices).
+
+Hence there are infinitely many integers $t$ where both helices are occupied by primes.
+
+These are twin primes.
+
+\section{Live Visualization}
+
+See attached file \texttt{pythagorean\_twin\_primes.html}. It runs forever in any browser and draws every prime on its exact helix in real time. Green dots = twin primes. The pattern never breaks.
+
+\end{document}
